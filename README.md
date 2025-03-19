@@ -19,6 +19,10 @@ git clone https://github.com/dxli94/WLASL.git
 ```
 
 2. Install [youtube-dl](https://github.com/ytdl-org/youtube-dl) for downloading YouTube videos.
+Since youtube-dl is not actively maintained, you might want to use yt-dlp instead, which is a more up-to-date fork.
+```
+pip install --user yt-dlp
+```
 3. Download raw videos.
 ```
 cd start_kit
@@ -102,6 +106,11 @@ Training and Testing
 ```
 cd WLASL
 mkdir data
+```
+generate video WLASL2000
+```
+cd start_kit
+python video_subset.py
 ```
 put all the videos under ```data/```.
 ```
