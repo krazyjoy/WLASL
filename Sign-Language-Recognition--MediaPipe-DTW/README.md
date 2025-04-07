@@ -33,16 +33,16 @@ The architecture of the `videos/` folder must be:
             ...
 ```
 
-To automatically create a small dataset of French signs:
 
-- Install `ffmpeg` (for MacOS `brew install ffmpeg`)
-- Run: ` python yt_download.py `
-- Add more YouTube links in ``yt_links.csv`` if needed
-> N.B. The current dataset is insufficient to obtain good results. Feel free to add more links or import your own videos 
-
-### 4. Load the dataset and turn on the Webcam
-
-- ` python main.py `
+### 4. Load the dataset and load i3d model with static checkpoint for inferencing mediapipe processed frames
+- `python transfer_video.py` (copies "WLASL/data/WLASL2000" videos to "Sign-Language.../data/videos")
+- ` python main.py ` (revised)
+  1. read clean_video2000.json (remain exist videos in json)
+  2. load i3d model
+  3. use videocapture to read video
+  4. process by mediapipe and sign language recorder
+  5. stack output frames together and send to i3d model
+  6. print top predicted class name and its probability 
 
 ### 5. Press the "r" key to record the sign. 
 
