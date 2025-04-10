@@ -138,7 +138,6 @@ def train_epoch(
                     p.grad /= num_iters
                 optimizer.step()
                 optimizer.zero_grad()
-
         if cfg.DETECTION.ENABLE:
             if cfg.NUM_GPUS > 1:
                 loss = du.all_reduce([loss])[0]
@@ -146,9 +145,6 @@ def train_epoch(
 
             # Update and log stats.
             train_meter.update_stats(None, None, None, loss, lr)
-            acc = 100.0 - top1_err
-            loss_history.append(loss)
-            acc_history.append(acc)
             # write to tensorboard format if available.
             if writer is not None:
                 writer.add_scalars(
@@ -204,7 +200,9 @@ def train_epoch(
                     },
                     global_step=data_size * cur_epoch + cur_iter,
                 )
-
+        acc = 100.0 - top1_err
+        loss_history.append(loss)
+        acc_history.append(acc)
         train_meter.iter_toc()  # measure allreduce for this meter
         train_meter.log_iter_stats(cur_epoch, cur_iter)
         train_meter.iter_tic()
