@@ -7,13 +7,15 @@ from models.sign_model import SignModel
 from utils.landmark_utils import save_landmarks_from_video, load_array
 
 
-def load_dataset():
+def load_dataset(mode: str):
+
     videos = [
         file_name.replace(".mp4", "")
-        for root, dirs, files in os.walk(os.path.join("data", "videos"))
+        for root, dirs, files in os.walk(os.path.join("data", f"videos/{mode}"))
         for file_name in files
         if file_name.endswith(".mp4")
     ]
+    
     dataset = [
         file_name.replace(".pickle", "").replace("pose_", "")
         for root, dirs, files in os.walk(os.path.join("data", "dataset"))
@@ -22,15 +24,18 @@ def load_dataset():
     ]
 
     # Create the dataset from the reference videos
+    
     videos_not_in_dataset = list(set(videos).difference(set(dataset)))
+
     n = len(videos_not_in_dataset)
     if n > 0:
         print(f"\nExtracting landmarks from new videos: {n} videos detected\n")
-
         for idx in tqdm(range(n)):
             save_landmarks_from_video(videos_not_in_dataset[idx])
 
     return videos
+
+    
 
 
 def load_reference_signs(videos):

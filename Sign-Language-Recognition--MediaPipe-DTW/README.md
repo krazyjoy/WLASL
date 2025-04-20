@@ -88,3 +88,9 @@ ___
 
  - [Pham Chinh Huu, Le Quoc Khanh, Le Thanh Ha : Human Action Recognition Using Dynamic Time Warping and Voting Algorithm](https://www.researchgate.net/publication/290440452)
  - [Mediapipe : Pose classification](https://google.github.io/mediapipe/solutions/pose_classification.html)
+
+
+## Instructions
+### Transfer Video
+1. creates a `clean_video2000.json` file that contains only readable videos within the nslt2000
+2. load_mediapipe.py
