@@ -5,6 +5,11 @@ class Config:
     def __init__(self, config_path):
         config = configparser.ConfigParser()
         config.read(config_path)
+        
+        for section in config:
+            print(f"[{section}]")
+            for key in config[section]:
+                print(f"{key} = {config[section][key]}")
 
         # training
         train_config = config['TRAIN']
@@ -32,5 +37,5 @@ class Config:
 
 
 if __name__ == '__main__':
-    config_path = '/home/dxli/workspace/nslt/code/VGG-GRU/configs/test.ini'
+    config_path = '/home/chuan194/work/roboticVision/WLASL/code/TGCN/configs/asl2000.ini'
     print(str(Config(config_path)))

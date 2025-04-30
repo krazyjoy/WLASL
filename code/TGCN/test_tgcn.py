@@ -88,20 +88,20 @@ def compute_top_n_accuracy(truths, preds, n):
 if __name__ == '__main__':
 
     # change root and subset accordingly.
-    root = '/media/anudisk/github/WLASL'
+    root = '/home/chuan194/work/roboticVision/WLASL'
     trained_on = 'asl2000'
 
-    checkpoint = 'ckpt.pth'
+    checkpoint = 'gcn_epoch=52_train_acc=85.66976335629188.pth'
 
     split_file = os.path.join(root, 'data/splits/{}.json'.format(trained_on))
     # test_on_split_file = os.path.join(root, 'data/splits-with-dialect-annotated/{}.json'.format(tested_on))
 
     pose_data_root = os.path.join(root, 'data/pose_per_individual_videos')
-    config_file = os.path.join(root, 'code/TGCN/archived/{}/{}.ini'.format(trained_on, trained_on))
+    config_file = os.path.join(root, 'code/TGCN/configs/{}.ini'.format(trained_on))
     configs = Config(config_file)
-
     num_samples = configs.num_samples
     hidden_size = configs.hidden_size
+    
     drop_p = configs.drop_p
     num_stages = configs.num_stages
     batch_size = configs.batch_size
@@ -109,18 +109,18 @@ if __name__ == '__main__':
     dataset = Sign_Dataset(index_file_path=split_file, split='test', pose_root=pose_data_root,
                            img_transforms=None, video_transforms=None,
                            num_samples=num_samples,
-                           sample_strategy='k_copies',
+                           sample_strategy='seq',
                            test_index_file=split_file
                            )
-    data_loader = torch.utils.data.DataLoader(dataset=dataset, batch_size=batch_size, shuffle=True)
+    data_loader = torch.utils.data.DataLoader(dataset=dataset, batch_size=batch_size, shuffle=True, num_workers=6, pin_memory=False)
 
     # setup the model
-    model = GCN_muti_att(input_feature=num_samples * 2, hidden_feature=hidden_size,
+    model = GCN_muti_att(input_feature=num_samples * 2, hidden_feature=num_samples*2,
                          num_class=int(trained_on[3:]), p_dropout=drop_p, num_stage=num_stages).cuda()
-
+    model = torch.nn.DataParallel(model)
     print('Loading model...')
 
-    checkpoint = torch.load(os.path.join(root, 'code/TGCN/archived/{}/{}'.format(trained_on, checkpoint)))
+    checkpoint = torch.load(os.path.join(root, 'code/TGCN/checkpoints/{}/{}'.format(trained_on, checkpoint)), weights_only=True)
     model.load_state_dict(checkpoint)
     print('Finish loading model!')
 

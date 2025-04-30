@@ -28,22 +28,14 @@ def compute_difference(x):
 
     return diff
 
-def create_feature_pickle(filepath):
-    with open(filepath, 'r') as f:
-        data = json.load(f)
-
-    if "people" not in data or len(data["people"]) == 0:
-        print(f"Warning: No people detected in {filepath}. Skipping.")
-        return None  # or return some default
-
-    content = data["people"][0]
-    
-    
-    
+def create_feature_pickle(image_path: str, video_id: str, frame_id: str):
+    content = json.load(open(image_path))["people"][0]
     body_pose_exclude = {9, 10, 11, 22, 23, 24, 12, 13, 14, 19, 20, 21}
+
     body_pose = content["pose_keypoints_2d"]
     left_hand_pose = content["hand_left_keypoints_2d"]
     right_hand_pose = content["hand_right_keypoints_2d"]
+
 
     body_pose.extend(left_hand_pose)
     body_pose.extend(right_hand_pose)
@@ -68,47 +60,31 @@ def create_feature_pickle(filepath):
 
     ft = torch.cat([xy, x_diff, y_diff, orient], dim=1)
 
-    path_parts = os.path.split(filepath)
-
-    frame_id = path_parts[1][:11]
-    vid = os.path.split(path_parts[0])[-1]
-
-    save_to = os.path.join('/home/chuan194/work/roboticVision/WLASL/code/TGCN/features', vid)
+    save_to = os.path.join('/home/chuan194/work/roboticVision/WLASL/code/TGCN/features', video_id)
     if not os.path.exists(save_to):
         os.mkdir(save_to)
     torch.save(ft, os.path.join(save_to, frame_id + '_ft.pt'))
-    # print(f"saved: {vid}/..{frame_id}_ft.pt")
-
     xy = ft[:, :2]
-    # angles = torch.atan(ft[:, 110:]) / 90
-    # ft = torch.cat([xy, angles], dim=1)
-    #
+
     return xy
-def read_pose_file(filepath):
 
-    path_parts = os.path.split(filepath)
-
-    frame_id = path_parts[1][:11]
-
-    vid = os.path.split(path_parts[0])[-1]
-
-    save_to = os.path.join('/home/chuan194/work/roboticVision/WLASL/code/TGCN/features', vid)
-    feature_path = os.path.join(save_to, frame_id + '_ft.pt')
-    if os.path.exists(feature_path) and os.path.getsize(feature_path) > 100:
+def read_pose_file(openpose_json: str, mode: str, video_id: str, frame_id: int):
+    
+    features_dir = "/home/chuan194/work/roboticVision/WLASL/code/TGCN/features"
+    feature_path = os.path.join(features_dir, video_id, 'image_'+ str(frame_id).zfill(5) + "_ft.pt")
+    if os.path.exists(feature_path):
         try:
-            ft = torch.load(feature_path, weights_only=True)
-
+            ft = torch.load(os.path.join(feature_path), weights_only=True)
             xy = ft[:, :2]
-            # angles = torch.atan(ft[:, 110:]) / 90
-            # ft = torch.cat([xy, angles], dim=1)
-            return xy   
-        except (FileNotFoundError, RuntimeError, EOFError):
-            return create_feature_pickle(filepath)
-
+            return xy
+        except (RuntimeError, EOFError) as e:
+            print(f"Warning: {feature_path} exists but cannot be loaded: {e}")
     else:
-        return create_feature_pickle(filepath)
-    # return ft
-
+        print(f"Feature file {feature_path} is missing or too small")
+    
+    pose_dir = "/home/chuan194/work/roboticVision/WLASL/data/pose_per_individual_videos"
+    image_json = os.path.join(pose_dir, video_id, 'image_'+ str(frame_id).zfill(5) + '_keypoints.json')
+    return create_feature_pickle(image_path=image_json, video_id=video_id, frame_id='image_'+ str(frame_id).zfill(5))
 
 class Sign_Dataset(Dataset):
     def __init__(self, index_file_path, split, pose_root, sample_strategy='rnd_start', num_samples=25, num_copies=4,
@@ -140,9 +116,9 @@ class Sign_Dataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, index):
-        video_id, gloss_cat, frame_start, frame_end = self.data[index]
+        video_id, gloss_cat, mode, frame_start, frame_end = self.data[index]
         # frames of dimensions (T, H, W, C)
-        x = self._load_poses(video_id, frame_start, frame_end, self.sample_strategy, self.num_samples)
+        x = self._load_poses(video_id, mode, frame_start, frame_end, self.sample_strategy, self.num_samples)
 
         if self.video_transforms:
             x = self.video_transforms(x)
@@ -167,46 +143,53 @@ class Sign_Dataset(Dataset):
                 content = json.load(f)
 
         # make dataset
-        gloss_cnt = 0
         for gloss_entry in content:
             gloss, instances = gloss_entry['gloss'], gloss_entry['instances']
             gloss_cat = utils.labels2cat(self.label_encoder, [gloss])[0]
-            instance_cnt=0
-            gloss_cnt += 1
+
             for instance in instances:
                 if instance['split'] not in split:
                     continue
-                if instance_cnt > 10:
-                    print(f"{gloss} instance_cnt: {instance_cnt}")
-                    break
+
                 frame_end = instance['frame_end']
                 frame_start = instance['frame_start']
                 video_id = instance['video_id']
+                mode = instance['split']
 
-                instance_entry = video_id, gloss_cat, frame_start, frame_end
+                instance_entry = video_id, gloss_cat, mode, frame_start, frame_end
                 self.data.append(instance_entry)
-                instance_cnt += 1
-            # print(f"{gloss} instance_cnt: {instance_cnt}")
-        # print("\033c")
-    def _load_poses(self, video_id, frame_start, frame_end, sample_strategy, num_samples):
+
+    def _load_poses(self, video_id, mode, frame_start, frame_end, sample_strategy, num_samples):
         """ Load frames of a video. Start and end indices are provided just to avoid listing and sorting the directory unnecessarily.
          """
         poses = []
-        # print(f"frame_start: {frame_start}, frame_end: {frame_end}")
-        if sample_strategy == 'rnd_start':
-            frames_to_sample = rand_start_sampling(frame_start, frame_end, num_samples)
-        elif sample_strategy == 'seq':
-            frames_to_sample = sequential_sampling(frame_start, frame_end, num_samples)
-        elif sample_strategy == 'k_copies':
-            frames_to_sample = k_copies_fixed_length_sequential_sampling(frame_start, frame_end, num_samples,
-                                                                         self.num_copies)
+        pose_folder = os.path.join(self.pose_root, mode, video_id)
+        feature_dir = os.path.join("/home/chuan194/work/roboticVision/WLASL/code/TGCN/features", video_id)
+        if not os.path.exists(feature_dir):
+            if not os.path.exists(pose_folder):
+                print(f"openpose_dir: {pose_folder} does not exist")
+                pose_folder = os.path.join("/home/chuan194/work/roboticVision/WLASL/data/pose_per_individual_videos", video_id)
+                if not os.path.exists(pose_folder):
+                    print(f"pose per individual videos {pose_folder} does not exist")
+            # frame_start = 1
+            # frame_end = len([f for f in os.listdir(pose_folder) if os.path.isfile(os.path.join(pose_folder, f))]) -1 
+            if sample_strategy == 'rnd_start':
+                frames_to_sample = rand_start_sampling(frame_start, frame_end, num_samples)
+            elif sample_strategy == 'seq':
+                frames_to_sample = sequential_sampling(frame_start, frame_end, num_samples)
+            elif sample_strategy == 'k_copies':
+                frames_to_sample = k_copies_fixed_length_sequential_sampling(frame_start, frame_end, num_samples,
+                                                                            self.num_copies)
+            else:
+                raise NotImplementedError('Unimplemented sample strategy found: {}.'.format(sample_strategy))
         else:
-            raise NotImplementedError('Unimplemented sample strategy found: {}.'.format(sample_strategy))
+            frames_to_sample = [f[6:11] for f in os.listdir(feature_dir)]
 
         for i in frames_to_sample:
-            pose_path = os.path.join(self.pose_root, video_id, self.framename.format(str(i).zfill(5)))
+            pose_path = os.path.join(self.pose_root, mode, video_id, self.framename.format(str(i).zfill(5)))
+            # print("pose_path: ", pose_path)
             # pose = cv2.imread(frame_path, cv2.COLOR_BGR2RGB)
-            pose = read_pose_file(pose_path)
+            pose = read_pose_file(pose_path, mode, video_id, i)
 
             if pose is not None:
                 if self.img_transforms:
@@ -217,22 +200,32 @@ class Sign_Dataset(Dataset):
                 try:
                     poses.append(poses[-1])
                 except IndexError:
-                    print("index error: ", pose_path)
+                    print(pose_path)
 
+    
         pad = None
-        if len(poses) == 0:
-            print("len pose = 0: ", pose_path)
-        # if len(frames_to_sample) < num_samples:
         if len(poses) < num_samples:
-            num_padding = num_samples - len(frames_to_sample)
-            last_pose = poses[-1]
-            pad = last_pose.repeat(1, num_padding)
-
-        poses_across_time = torch.cat(poses, dim=1)
+            # Not enough frames: pad by repeating the last pose
+            num_padding = num_samples - len(poses)
+            last_pose = poses[-1]  # (nodes, 2)
+            pad = [last_pose.clone() for _ in range(num_padding)]  # list of (nodes,2)
+        else:
+            poses = poses[-num_samples: ]
+        # Now poses is a list of (nodes, 2)
+        # print('poses.shape: ', poses[0].shape)
+        
+        poses_across_time = poses
         if pad is not None:
-            poses_across_time = torch.cat([poses_across_time, pad], dim=1)
+            poses_across_time += pad  # append padding poses
+        # print("poses_across_time: ", len(poses_across_time))
+        # poses_across_time now has exactly num_samples frames
+        assert len(poses_across_time) == num_samples, f"Expected {num_samples}, got {len(poses_across_time)}" # (nodes, num_samples, 2)
 
-        return poses_across_time
+        # Now we concatenate poses across time
+        # Each pose has 2 features (x,y), so after concat we get (nodes, num_samples*2)
+        poses_across_time = torch.cat(poses_across_time, dim=1)
+        # print("poses_across_time.cat: ", poses_across_time.shape)
+        return poses_across_time #(nodes, num_samples*2)
 
 
 def rand_start_sampling(frame_start, frame_end, num_samples):

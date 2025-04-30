@@ -16,13 +16,15 @@ class GraphConvolution_att(nn.Module):
     """
     Simple GCN layer, similar to https://arxiv.org/abs/1609.02907
     """
-
+    global nodes
+    nodes = 55
     def __init__(self, in_features, out_features, bias=True, init_A=0):
         super(GraphConvolution_att, self).__init__()
+    
         self.in_features = in_features
         self.out_features = out_features
         self.weight = Parameter(torch.FloatTensor(in_features, out_features))
-        self.att = Parameter(torch.FloatTensor(55, 55))
+        self.att = Parameter(torch.FloatTensor(nodes, nodes))
         if bias:
             self.bias = Parameter(torch.FloatTensor(out_features))
         else:
@@ -60,10 +62,10 @@ class GC_Block(nn.Module):
         self.is_resi = is_resi
 
         self.gc1 = GraphConvolution_att(in_features, in_features)
-        self.bn1 = nn.BatchNorm1d(55 * in_features)
+        self.bn1 = nn.BatchNorm1d(nodes * in_features)
 
         self.gc2 = GraphConvolution_att(in_features, in_features)
-        self.bn2 = nn.BatchNorm1d(55 * in_features)
+        self.bn2 = nn.BatchNorm1d(nodes * in_features)
 
         self.do = nn.Dropout(p_dropout)
         self.act_f = nn.Tanh()
@@ -97,7 +99,7 @@ class GCN_muti_att(nn.Module):
         self.num_stage = num_stage
 
         self.gc1 = GraphConvolution_att(input_feature, hidden_feature)
-        self.bn1 = nn.BatchNorm1d(55 * hidden_feature)
+        self.bn1 = nn.BatchNorm1d(nodes * hidden_feature)
 
         self.gcbs = []
         for i in range(num_stage):
@@ -110,7 +112,7 @@ class GCN_muti_att(nn.Module):
         self.do = nn.Dropout(p_dropout)
         self.act_f = nn.Tanh()
 
-        # self.fc1 = nn.Linear(55 * output_feature, fc1_out)
+        # self.fc1 = nn.Linear(nodes * output_feature, fc1_out)
         self.fc_out = nn.Linear(hidden_feature, num_class)
 
     def forward(self, x):
@@ -135,6 +137,6 @@ if __name__ == '__main__':
 
     model = GCN_muti_att(input_feature=num_samples*2, hidden_feature=256,
                          num_class=100, p_dropout=0.3, num_stage=2)
-    x = torch.ones([2, 55, num_samples*2])
+    x = torch.ones([2, nodes, num_samples*2])
     print(model(x).size())
 

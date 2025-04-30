@@ -12,12 +12,13 @@ def train(log_interval, model, train_loader, optimizer, epoch):
     scores = []
     train_labels = []
     train_preds = []
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     N_count = 0  # counting total trained sample in one epoch
     for batch_idx, data in enumerate(train_loader):
         X, y, video_ids = data
         # distribute data to device
-        X, y = X.cuda(), y.cuda().view(-1, )
+        X, y = X.to(device, non_blocking=True), y.to(device, non_blocking=True).view(-1, )
 
         N_count += X.size(0)
 
@@ -26,12 +27,12 @@ def train(log_interval, model, train_loader, optimizer, epoch):
 
         loss = compute_loss(out, y)
 
-        # loss = F.cross_entropy(output, y)
+
         losses.append(loss.item())
 
-        # to compute accuracy
-        y_pred = torch.max(out, 1)[1]  # y_pred != output
+       
 
+        y_pred = torch.max(out, 1)[1]
         step_score = accuracy_score(y.cpu().data.squeeze().numpy(), y_pred.cpu().data.squeeze().numpy())
 
         # collect prediction labels
@@ -42,21 +43,12 @@ def train(log_interval, model, train_loader, optimizer, epoch):
 
         loss.backward()
 
-        # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=6)
-        #
-        # for p in model.parameters():
-        #     param_norm = p.grad.data.norm(2)
-        #     total_norm += param_norm.item() ** 2
-        # total_norm = total_norm ** (1. / 2)
-        #
-        # print(total_norm)
-
         optimizer.step()
 
         # show information
         if (batch_idx + 1) % log_interval == 0:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}, Accu: {:.6f}%'.format(
-                epoch + 1, N_count, len(train_loader.dataset), 100. * (batch_idx + 1) / len(train_loader), loss.item(),
+                epoch, N_count, len(train_loader.dataset), 100. * (batch_idx + 1) / len(train_loader), loss.item(),
                 100 * step_score))
 
     return losses, scores, train_labels, train_preds
